@@ -1,0 +1,221 @@
+import React, { useState, useMemo } from 'react';
+import Header from './components/Header/Header';
+import ProjectCard from './components/ProjectCard/ProjectCard';
+import ProjectForm from './components/ProjectForm/ProjectForm';
+import SearchBar from './components/SearchBar/SearchBar';
+import Footer from './components/Footer/Footer';
+import useLocalStorage from './hooks/useLocalStorage';
+import { initialProjects } from './utils/data';
+import './styles/global.css';
+import './App.css';
+
+function App() {
+  const [darkMode, setDarkMode] = useLocalStorage('darkMode', false);
+  const [projects, setProjects] = useLocalStorage('projects', initialProjects);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [filters, setFilters] = useState({
+    category: 'All',
+    sortBy: 'newest'
+  });
+  const [isFormOpen, setIsFormOpen] = useState(false);
+  const [editingProject, setEditingProject] = useState(null);
+
+  // Toggle dark mode
+  const toggleDarkMode = () => {
+    setDarkMode(!darkMode);
+    if (!darkMode) {
+      document.documentElement.classList.add('dark-mode');
+    } else {
+      document.documentElement.classList.remove('dark-mode');
+    }
+  };
+
+  // Apply dark mode on initial load
+  React.useEffect(() => {
+    if (darkMode) {
+      document.documentElement.classList.add('dark-mode');
+    }
+  }, []);
+
+  // Filter and sort projects
+  const filteredProjects = useMemo(() => {
+    let filtered = [...projects];
+
+    // Apply search filter
+    if (searchTerm) {
+      const term = searchTerm.toLowerCase();
+      filtered = filtered.filter(project =>
+        project.title.toLowerCase().includes(term) ||
+        project.description.toLowerCase().includes(term) ||
+        project.technologies.some(tech => tech.toLowerCase().includes(term))
+      );
+    }
+
+    // Apply category filter
+    if (filters.category !== 'All') {
+      filtered = filtered.filter(project => project.category === filters.category);
+    }
+
+    // Apply sorting
+    filtered.sort((a, b) => {
+      switch (filters.sortBy) {
+        case 'newest':
+          return new Date(b.date) - new Date(a.date);
+        case 'oldest':
+          return new Date(a.date) - new Date(b.date);
+        case 'title':
+          return a.title.localeCompare(b.title);
+        default:
+          return 0;
+      }
+    });
+
+    return filtered;
+  }, [projects, searchTerm, filters]);
+
+  // Handle project form submission
+  const handleSubmitProject = (projectData) => {
+    if (editingProject) {
+      // Update existing project
+      setProjects(prev => prev.map(p => 
+        p.id === projectData.id ? projectData : p
+      ));
+    } else {
+      // Add new project
+      setProjects(prev => [projectData, ...prev]);
+    }
+    setEditingProject(null);
+  };
+
+  // Handle project edit
+  const handleEditProject = (project) => {
+    setEditingProject(project);
+    setIsFormOpen(true);
+  };
+
+  // Handle project delete
+  const handleDeleteProject = (projectId) => {
+    if (window.confirm('Are you sure you want to delete this project?')) {
+      setProjects(prev => prev.filter(p => p.id !== projectId));
+    }
+  };
+
+  // Handle filter change
+  const handleFilterChange = (newFilters) => {
+    setFilters(newFilters);
+  };
+
+  return (
+    <div className="App">
+      <Header 
+        darkMode={darkMode}
+        toggleDarkMode={toggleDarkMode}
+        onAddProject={() => setIsFormOpen(true)}
+      />
+
+      <main>
+        <section className="hero">
+          <div className="container">
+            <div className="hero-content">
+              <h1 className="hero-title">
+                Showcase Your <span className="highlight">Creative</span> Projects
+              </h1>
+              <p className="hero-subtitle">
+                A modern portfolio platform to display your work, add new projects, and inspire others.
+                Everything you need to showcase your creativity in one place.
+              </p>
+              <button 
+                className="btn btn-primary hero-cta"
+                onClick={() => setIsFormOpen(true)}
+              >
+                + Add Your Project
+              </button>
+            </div>
+          </div>
+        </section>
+
+        <SearchBar 
+          searchTerm={searchTerm}
+          onSearchChange={setSearchTerm}
+          filters={filters}
+          onFilterChange={handleFilterChange}
+        />
+
+        <section className="projects-section" id="projects">
+          <div className="container">
+            <h2 className="section-title">
+              Featured Projects
+              <span className="project-count"> ({filteredProjects.length})</span>
+            </h2>
+
+            {filteredProjects.length === 0 ? (
+              <div className="no-projects">
+                <div className="no-projects-icon">Ì¥ç</div>
+                <h3>No projects found</h3>
+                <p>
+                  {searchTerm 
+                    ? `No projects match "${searchTerm}". Try a different search term.`
+                    : 'No projects available. Add your first project!'}
+                </p>
+                <button 
+                  className="btn btn-primary"
+                  onClick={() => setIsFormOpen(true)}
+                >
+                  + Add First Project
+                </button>
+              </div>
+            ) : (
+              <div className="projects-grid grid">
+                {filteredProjects.map(project => (
+                  <ProjectCard
+                    key={project.id}
+                    project={project}
+                    onEdit={handleEditProject}
+                    onDelete={handleDeleteProject}
+                  />
+                ))}
+              </div>
+            )}
+          </div>
+        </section>
+
+        <section className="stats-section">
+          <div className="container">
+            <div className="stats-grid">
+              <div className="stat-card">
+                <div className="stat-number">{projects.length}</div>
+                <div className="stat-label">Total Projects</div>
+              </div>
+              <div className="stat-card">
+                <div className="stat-number">
+                  {[...new Set(projects.map(p => p.category))].length}
+                </div>
+                <div className="stat-label">Categories</div>
+              </div>
+              <div className="stat-card">
+                <div className="stat-number">
+                  {projects.reduce((acc, p) => acc + p.technologies.length, 0)}
+                </div>
+                <div className="stat-label">Technologies Used</div>
+              </div>
+            </div>
+          </div>
+        </section>
+      </main>
+
+      <ProjectForm
+        isOpen={isFormOpen}
+        onClose={() => {
+          setIsFormOpen(false);
+          setEditingProject(null);
+        }}
+        onSubmit={handleSubmitProject}
+        projectToEdit={editingProject}
+      />
+
+      <Footer />
+    </div>
+  );
+}
+
+export default App;
